@@ -1,6 +1,6 @@
 # Yomy Task App
 
-[![CI/CD](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/ci.yml)
+[![CI/CD](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/cicd.yaml/badge.svg?branch=main)](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/cicd.yaml)
 [![Node.js 22](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
@@ -38,7 +38,7 @@ The developer pushes code to GitHub. GitHub Actions tests the application and bu
 | Web UI | `index.html` | Arabic task manager interface and browser-side behavior |
 | Express app | `app.js`, `server.js` | Serves the app on port `3000`, plus `/health` and `/version` |
 | Tests | `test/` | HTTP route and deployment tests |
-| GitHub Actions | `.github/workflows/ci.yml` | Tests, builds, publishes, and deploys the app |
+| GitHub Actions | `.github/workflows/cicd.yaml` | Tests, builds, publishes, and deploys the app |
 | Container | `Dockerfile` | Packages the Node.js application |
 
 ## Requirements
@@ -84,7 +84,7 @@ Open <http://localhost:8080>. Port mapping uses `HOST_PORT:CONTAINER_PORT`; the 
 
 ## CI/CD pipeline
 
-The workflow is defined in `.github/workflows/ci.yml` and runs for pull requests targeting `main` and pushes to `main`.
+The workflow is defined in `.github/workflows/cicd.yaml` and runs for pull requests targeting `main` and pushes to `main`.
 
 ### Pull requests
 
@@ -105,7 +105,8 @@ After the same dependency installation and tests, the workflow:
 3. Publishes `<DOCKERHUB_USERNAME>/cipp` tagged with both the commit SHA and `latest`.
 4. Loads the SSH key into a temporary agent and connects to EC2.
 5. Pulls the commit-specific image, replaces the `cipp` container, and starts it with `--restart unless-stopped` on host port `80` mapped to container port `3000`.
-6. Checks that the new container is running.
+6. Calls the remote deployment script, which waits for the Docker health check or `/health` endpoint to pass for up to 60 seconds.
+7. If the new container fails to start or become healthy, prints its recent logs and attempts to restore the previous healthy image. The workflow still fails so the unsuccessful deployment is visible in Actions.
 
 The workflow deploys the commit-SHA image so the server receives the exact image built for that push, rather than resolving `latest`.
 
@@ -134,7 +135,7 @@ Once configured, a successful push to `main` triggers image publishing and deplo
 
 ### Deployment behavior and limitations
 
-The current deployment step pulls the new image, removes the existing `cipp` container, starts the new one, waits two seconds, and checks that it is running. It does not currently perform an HTTP health check or roll back automatically if the new application fails after startup; the replacement can cause brief downtime. For production, add a health check and rollback or use a rolling deployment strategy.
+The deployment uses the Docker `HEALTHCHECK` against `/health` and waits up to 60 seconds for readiness. On failure, it prints the candidate container logs and attempts to restore the last healthy image recorded on EC2. If no previous healthy image is available, rollback is not possible and the workflow reports the deployment as failed. The current strategy removes the old container before the new one is verified, so a failed rollout can cause brief downtime even when rollback succeeds; use a rolling deployment strategy for zero-downtime releases.
 
 ## Security
 
@@ -160,7 +161,7 @@ The current deployment step pulls the new image, removes the existing `cipp` con
 
 The badge below shows the live workflow status for `main`; select it to open GitHub Actions. A recent successful run is available [here](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/runs/38037646143).
 
-[![Latest workflow status on main](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/ci.yml)
+[![Latest workflow status on main](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/cicd.yaml/badge.svg?branch=main)](https://github.com/moashraf675/automated-ci-cd-pipline-for-deckerized-web-app/actions/workflows/cicd.yaml)
 
 ### Deployed application
 

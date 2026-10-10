@@ -31,3 +31,17 @@ test("reports a healthy status", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok" });
 });
+
+test("reports the deployed version and revision", async () => {
+  process.env.BUILD_VERSION = "1.2.3";
+  process.env.BUILD_REVISION = "test-revision";
+  try {
+    const response = await fetch(`${baseUrl}/version`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { version: "1.2.3", revision: "test-revision" });
+  } finally {
+    delete process.env.BUILD_VERSION;
+    delete process.env.BUILD_REVISION;
+  }
+});
