@@ -28,9 +28,20 @@ docker run --rm -p 8080:3000 task-board
 
 ثم افتح <http://localhost:8080>.
 
-## النشر إلى Docker Hub
+## النشر إلى EC2
 
-أضف السرّين `DOCKERHUB_USERNAME` و`DOCKERHUB_TOKEN` إلى إعدادات المستودع في
-GitHub من **Settings → Secrets and variables → Actions**. عند كل عملية push،
-ينشر سير العمل الصورة إلى `moashraf07/cipp` بوسم commit ووسم `latest`.
-أما عمليات pull request فتُجري البناء والاختبارات فقط دون استخدام بيانات الاعتماد.
+أضف الأسرار التالية إلى **Settings → Secrets and variables → Actions** في
+مستودع GitHub:
+
+- `EC2_HOST`: عنوان IP العام أو اسم DNS العام لخادم EC2.
+- `EC2_USER`: مستخدم SSH، مثل `ec2-user` على Amazon Linux 2023.
+- `EC2_SSH_KEY`: المحتوى الكامل للمفتاح الخاص بصيغة PEM الذي يتيح الدخول إلى الخادم.
+
+تأكد من تثبيت Docker وتشغيله على الخادم، ومن أن مستخدم SSH يستطيع تشغيل أوامر
+Docker دون `sudo` (أعد تسجيل الدخول بعد إضافته إلى مجموعة `docker`). اسمح باتصالات
+SSH على المنفذ 22 من عناوين GitHub Actions runner، وافتح TCP على المنفذ 80
+للمستخدمين الذين يحتاجون إلى الموقع.
+
+عند كل push إلى `main`، يجري GitHub Actions الاختبارات ويبني صورة Docker ثم
+ينقلها عبر SSH إلى EC2 ويعيد تشغيل الحاوية على المنفذ 80. عمليات pull request
+تشغّل الاختبارات والبناء فقط ولا تستخدم أسرار النشر.

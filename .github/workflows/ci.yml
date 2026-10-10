@@ -1,8 +1,10 @@
-name: CI
+name: CI and Deploy
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -29,17 +31,32 @@ jobs:
       - name: Build Docker image
         run: docker build -t cipp:${{ github.sha }} .
 
-      - name: Log in to Docker Hub
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Docker image
-        if: github.event_name == 'push'
+      - name: Deploy to EC2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
-          docker tag "cipp:${GITHUB_SHA}" "moashraf07/cipp:${GITHUB_SHA}"
-          docker tag "cipp:${GITHUB_SHA}" "moashraf07/cipp:latest"
-          docker push "moashraf07/cipp:${GITHUB_SHA}"
-          docker push "moashraf07/cipp:latest"
+          set -euo pipefail
+          : "${EC2_HOST:?Add the EC2_HOST GitHub Actions secret}"
+          : "${EC2_USER:?Add the EC2_USER GitHub Actions secret}"
+          : "${EC2_SSH_KEY:?Add the EC2_SSH_KEY GitHub Actions secret}"
+
+          install -m 700 -d "$HOME/.ssh"
+          ssh-keyscan -H "$EC2_HOST" >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          eval "$(ssh-agent -s)"
+          trap 'ssh-agent -k >/dev/null' EXIT
+          printf '%s\n' "$EC2_SSH_KEY" | ssh-add -
+
+          docker save "cipp:${GITHUB_SHA}" | gzip -1 | \
+            ssh -o BatchMode=yes "$EC2_USER@$EC2_HOST" \
+            "set -eu
+            docker load
+            if docker container inspect cipp >/dev/null 2>&1; then
+              docker rm -f cipp
+            fi
+            docker run -d --name cipp --restart unless-stopped -p 80:3000 cipp:${GITHUB_SHA}
+            sleep 2
+            test \"\$(docker inspect -f '{{.State.Running}}' cipp)\" = true"
