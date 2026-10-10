@@ -43,6 +43,11 @@ jobs:
           : "${EC2_USER:?Add the EC2_USER GitHub Actions secret}"
           : "${EC2_SSH_KEY:?Add the EC2_SSH_KEY GitHub Actions secret}"
 
+          if [[ ! "$EC2_USER" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "::error::EC2_USER must be only the SSH login name (for example, ec2-user), without a host, @, or whitespace."
+            exit 1
+          fi
+
           install -m 700 -d "$HOME/.ssh"
           ssh-keyscan -H "$EC2_HOST" >> "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
@@ -50,8 +55,10 @@ jobs:
           trap 'ssh-agent -k >/dev/null' EXIT
           printf '%s\n' "$EC2_SSH_KEY" | ssh-add -
 
-          docker save "cipp:${GITHUB_SHA}" | gzip -1 | \
-            ssh -o BatchMode=yes "$EC2_USER@$EC2_HOST" \
+          image_archive="$RUNNER_TEMP/cipp-${GITHUB_SHA}.tar.gz"
+          docker save "cipp:${GITHUB_SHA}" | gzip -1 > "$image_archive"
+
+          ssh -o BatchMode=yes -l "$EC2_USER" "$EC2_HOST" \
             "set -eu
             docker load
             if docker container inspect cipp >/dev/null 2>&1; then
@@ -59,4 +66,5 @@ jobs:
             fi
             docker run -d --name cipp --restart unless-stopped -p 80:3000 cipp:${GITHUB_SHA}
             sleep 2
-            test \"\$(docker inspect -f '{{.State.Running}}' cipp)\" = true"
+            test \"\$(docker inspect -f '{{.State.Running}}' cipp)\" = true" \
+            < "$image_archive"
