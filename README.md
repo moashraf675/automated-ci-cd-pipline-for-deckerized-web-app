@@ -32,5 +32,5 @@ docker run --rm -p 8080:3000 task-board
 
 أضف السرّين `DOCKERHUB_USERNAME` و`DOCKERHUB_TOKEN` إلى إعدادات المستودع في
 GitHub من **Settings → Secrets and variables → Actions**. عند كل عملية push،
-ينشر سير العمل الصورة باسم `<DOCKERHUB_USERNAME>/yomy-task-app:<commit-sha>`.
+ينشر سير العمل الصورة إلى `moashraf07/cipp` بوسم commit ووسم `latest`.
 أما عمليات pull request فتُجري البناء والاختبارات فقط دون استخدام بيانات الاعتماد.

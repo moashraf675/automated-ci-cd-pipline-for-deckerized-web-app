@@ -27,7 +27,7 @@ jobs:
         run: npm test
 
       - name: Build Docker image
-        run: docker build -t yomy-task-app:${{ github.sha }} .
+        run: docker build -t cipp:${{ github.sha }} .
 
       - name: Log in to Docker Hub
         if: github.event_name == 'push'
@@ -38,8 +38,8 @@ jobs:
 
       - name: Push Docker image
         if: github.event_name == 'push'
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          docker tag "yomy-task-app:${GITHUB_SHA}" "$DOCKERHUB_USERNAME/yomy-task-app:${GITHUB_SHA}"
-          docker push "$DOCKERHUB_USERNAME/yomy-task-app:${GITHUB_SHA}"
+          docker tag "cipp:${GITHUB_SHA}" "moashraf07/cipp:${GITHUB_SHA}"
+          docker tag "cipp:${GITHUB_SHA}" "moashraf07/cipp:latest"
+          docker push "moashraf07/cipp:${GITHUB_SHA}"
+          docker push "moashraf07/cipp:latest"
