@@ -31,7 +31,7 @@ jobs:
       - name: Build Docker image
         run: docker build -t cipp:${{ github.sha }} .
 
-      - name: Deploy to EC2
+      - name: Deploy to ECc2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
