@@ -1,0 +1,17 @@
+{
+  "name": "yomy-task-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A small Arabic task manager built with Node.js and Express",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
