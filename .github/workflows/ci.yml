@@ -28,8 +28,30 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build Docker image
+      - name: Build Docker image for pull request
+        if: github.event_name == 'pull_request'
         run: docker build -t cipp:${{ github.sha }} .
+
+      - name: Set up Docker Buildx
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cipp:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cipp:latest
 
       - name: Deploy to ECc2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -37,14 +59,21 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           set -euo pipefail
           : "${EC2_HOST:?Add the EC2_HOST GitHub Actions secret}"
           : "${EC2_USER:?Add the EC2_USER GitHub Actions secret}"
           : "${EC2_SSH_KEY:?Add the EC2_SSH_KEY GitHub Actions secret}"
+          : "${DOCKERHUB_USERNAME:?Add the DOCKERHUB_USERNAME GitHub Actions secret}"
 
           if [[ ! "$EC2_USER" =~ ^[a-zA-Z0-9._-]+$ ]]; then
             echo "::error::EC2_USER must be only the SSH login name (for example, ec2-user), without a host, @, or whitespace."
+            exit 1
+          fi
+
+          if [[ ! "$DOCKERHUB_USERNAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+            echo "::error::DOCKERHUB_USERNAME must be a lowercase Docker Hub username containing only letters, numbers, underscores, or hyphens."
             exit 1
           fi
 
@@ -55,16 +84,16 @@ jobs:
           trap 'ssh-agent -k >/dev/null' EXIT
           printf '%s\n' "$EC2_SSH_KEY" | ssh-add -
 
-          image_archive="$RUNNER_TEMP/cipp-${GITHUB_SHA}.tar.gz"
-          docker save "cipp:${GITHUB_SHA}" | gzip -1 > "$image_archive"
-
+          image_ref="${DOCKERHUB_USERNAME}/cipp:${GITHUB_SHA}"
           ssh -o BatchMode=yes -l "$EC2_USER" "$EC2_HOST" \
-            "set -eu
-            docker load
-            if docker container inspect cipp >/dev/null 2>&1; then
-              docker rm -f cipp
-            fi
-            docker run -d --name cipp --restart unless-stopped -p 80:3000 cipp:${GITHUB_SHA}
-            sleep 2
-            test \"\$(docker inspect -f '{{.State.Running}}' cipp)\" = true" \
-            < "$image_archive"
+            "sh -s -- '$image_ref'" <<'REMOTE'
+          set -eu
+          image_ref="$1"
+          docker pull "$image_ref"
+          if docker container inspect cipp >/dev/null 2>&1; then
+            docker rm -f cipp
+          fi
+          docker run -d --name cipp --restart unless-stopped -p 80:3000 "$image_ref"
+          sleep 2
+          test "$(docker inspect -f '{{.State.Running}}' cipp)" = true
+          REMOTE
